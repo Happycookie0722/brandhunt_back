@@ -1,0 +1,8 @@
+spring:
+  profiles:
+    active: dev  # ← 기본은 개발용(dev)로 설정
+  application:
+    name: BrandHunt
+
+server:
+  port: 8000

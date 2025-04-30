@@ -1,4 +1,4 @@
-package com.dev.BrandHunt.Util;
+package com.dev.BrandHunt.Common;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;

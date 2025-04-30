@@ -1,5 +1,7 @@
 package com.dev.BrandHunt.Config;
 
+import com.dev.BrandHunt.Security.JwtAuthenticationFilter;
+import jakarta.servlet.Filter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,7 +35,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated() // 그 외는 인증 필요
             )
             .authenticationProvider(authenticationProvider) // 사용자 인증 제공자
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 

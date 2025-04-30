@@ -18,7 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    // 매 요청마다 jwt 토큰을 검사
+    // 매 요청마다 jwt 토큰을 검사.
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     // DB에서 사용자 조회해서 인증
     private final AuthenticationProvider authenticationProvider;

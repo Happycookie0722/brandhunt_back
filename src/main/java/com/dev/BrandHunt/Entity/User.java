@@ -13,8 +13,6 @@ import java.util.List;
 @Getter @Setter @Entity
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-@Table(name = "users")
 public class User extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

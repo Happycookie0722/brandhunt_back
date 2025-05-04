@@ -2,6 +2,7 @@ package com.dev.BrandHunt.Service;
 
 import com.dev.BrandHunt.Common.CustomException;
 import com.dev.BrandHunt.Constant.ErrorCode;
+import com.dev.BrandHunt.Constant.UserStatus;
 import com.dev.BrandHunt.Entity.User;
 import com.dev.BrandHunt.Repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,14 @@ public class UserService {
         log.info("4444" + aaa);
         if (!passwordEncoder.matches(password, user.getPassword())) {
             throw new CustomException(ErrorCode.INVALID_PASSWORD);
+        }
+
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw new CustomException(ErrorCode.USER_INACTIVE);
+        }
+
+        if (user.getStatus() == UserStatus.SUSPENDED) {
+            throw new CustomException(ErrorCode.USER_SUSPENDED);
         }
 
         return user;

@@ -6,9 +6,10 @@ import lombok.Getter;
 
 @Getter
 public class LoginRequestDto {
-    @Email
+    @NotBlank(message = "MISSING_REQUIRED_FIELDS")
+    @Email(message = "INVALID_EMAIL")
     private String email;
 
-    @NotBlank
+    @NotBlank(message = "MISSING_REQUIRED_FIELDS")
     private String password;
 }

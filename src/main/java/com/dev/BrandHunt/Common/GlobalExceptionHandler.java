@@ -2,8 +2,13 @@ package com.dev.BrandHunt.Common;
 
 import com.dev.BrandHunt.Constant.ErrorCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.validation.ObjectError;
+import java.util.List;
+import java.util.stream.Collectors;
 
 // ControllerAdvice : 모든 컨트롤러에서 발생하는 예외를 처리하도록 함
 @ControllerAdvice
@@ -25,6 +30,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(500)
                 .body(new ErrorResponse(500, "알 수 없는 오류가 발생했습니다."));
+    }
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<?> handleValidationException(MethodArgumentNotValidException ex) {
+
+        FieldError fieldError = (FieldError) ex.getBindingResult().getAllErrors().get(0);
+        String codeKey = fieldError.getDefaultMessage(); // "EMAIL_REQUIRED", "INVALID_EMAIL" 등
+
+        ErrorCode errorCode;
+        try {
+            errorCode = ErrorCode.valueOf(codeKey); // Enum 이름과 메시지가 일치할 경우
+        } catch (IllegalArgumentException e) {
+            errorCode = ErrorCode.INTERNAL_SERVER_ERROR; // fallback
+        }
+
+        return new ResponseEntity<>(
+                new ErrorResponse(errorCode.getStatus().value(), errorCode.getMessage()),
+                errorCode.getStatus()
+        );
     }
 
     // 내부 에러 응답용 DTO

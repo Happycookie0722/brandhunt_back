@@ -1,4 +1,4 @@
-package com.dev.BrandHunt.Common;
+package com.dev.BrandHunt.Constant;
 
 import lombok.Getter;
 import org.springframework.http.HttpStatus;

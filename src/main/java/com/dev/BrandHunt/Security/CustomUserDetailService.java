@@ -9,7 +9,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import static com.dev.BrandHunt.Common.ErrorCode.USER_NOT_FOUND;
+import static com.dev.BrandHunt.Constant.ErrorCode.USER_NOT_FOUND;
 
 @Service
 @RequiredArgsConstructor

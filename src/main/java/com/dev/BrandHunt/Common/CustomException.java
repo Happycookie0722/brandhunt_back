@@ -1,5 +1,6 @@
 package com.dev.BrandHunt.Common;
 
+import com.dev.BrandHunt.Constant.ErrorCode;
 import lombok.Getter;
 
 @Getter

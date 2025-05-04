@@ -1,7 +1,7 @@
 package com.dev.BrandHunt.Common;
 
+import com.dev.BrandHunt.Constant.ErrorCode;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 

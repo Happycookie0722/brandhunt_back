@@ -10,10 +10,27 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
-
         format_sql: true
     show-sql: true
-
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: brandhunt444@gmail.com
+    password: nikftefxgncnixct
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
 logging:
   level:
     org.hibernate.SQL: debug
+
+jwt:
+  secret: "BrandHunt123BrandHunt123BrandHunt123BrandHunt123"
+  access:
+    expiration: 1800000  # 30분
+  refresh:
+    expiration: 604800000 # 7일

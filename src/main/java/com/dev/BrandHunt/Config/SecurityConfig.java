@@ -40,7 +40,10 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults()) // CORS 정책으로 인한 임시추가
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers(
+                                "/auth/**"
+                                        ,"/users/check-nickname")
+                        .permitAll()
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())

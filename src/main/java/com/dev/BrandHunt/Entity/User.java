@@ -1,11 +1,15 @@
 package com.dev.BrandHunt.Entity;
 
 import com.dev.BrandHunt.Constant.UserStatus;
+import com.dev.BrandHunt.DTO.SignUpDto;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.validator.constraints.Length;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,4 +46,15 @@ public class User extends BaseTimeEntity {
     private UserStatus status;
 
     private String profile_img;
+
+    public static User createUser(SignUpDto dto, PasswordEncoder passwordEncoder) {
+        User user = new User();
+        user.setEmail(dto.getEmail());
+        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        user.setNickName(dto.getNickName());
+        user.setStatus(UserStatus.ACTIVE);
+        user.setLast_login_at(LocalDateTime.now());
+        user.setPassword_change_at(LocalDateTime.now());
+        return user;
+    }
 }

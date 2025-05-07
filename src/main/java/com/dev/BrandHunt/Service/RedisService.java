@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -12,6 +13,11 @@ import java.util.concurrent.TimeUnit;
 public class RedisService {
 
     private final StringRedisTemplate redisTemplate;
+    public static final String NICKNAME_PREFIX = "nickname:";
+    private static final String VERIFY_PREFIX = "verify:code:";
+    private static final String EMAIL_PREFIX = "email:";
+    private static final String REFRESH_PREFIX = "refresh:";
+
 
     // Refresh Token 저장 (7일)
     public void saveRefreshToken(String email, String refreshToken) {
@@ -28,12 +34,26 @@ public class RedisService {
         redisTemplate.delete(email);
     }
 
-    public void setValue(String key, String value, long timeout, TimeUnit unit) {
-        redisTemplate.opsForValue().set(key, value, timeout, unit);
+    public void setEmailVerification(String key, String value, boolean verified, long timeOut, TimeUnit timeUnit) {
+        redisTemplate.opsForHash().put(key, "code", value);
+        redisTemplate.opsForHash().put(key, "verified", String.valueOf(verified));
+        redisTemplate.expire(key, timeOut, timeUnit);
     }
 
-    public String getValue(String key) {
-        return redisTemplate.opsForValue().get(key);
+    // 이메일로 전송한 코드 일치 확인
+    public String getEmailVerification(String key) {
+        Object code = redisTemplate.opsForHash().get(key, "code");
+        return Objects.toString(code, null);
+    }
+
+    public void setEmailVerified(String key) {
+        redisTemplate.opsForHash().put(key, "verified", true);
+    }
+
+    // 회원가입시 이메일 인증 여부 확인
+    public Boolean isEmailVerified(String key) {
+        Object verified = redisTemplate.opsForHash().get(key, "code");
+        return "true".equalsIgnoreCase(verified.toString());
     }
 
     public void delete(String key) {
@@ -43,4 +63,6 @@ public class RedisService {
     public boolean hasKey(String key) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(key));
     }
+
+
 }

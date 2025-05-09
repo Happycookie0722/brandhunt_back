@@ -45,6 +45,7 @@ dependencies {
 	// 크롤링
 	// https://mvnrepository.com/artifact/org.seleniumhq.selenium/selenium-java
 	implementation("org.seleniumhq.selenium:selenium-java:4.31.0")
+	implementation 'io.github.bonigarcia:webdrivermanager:5.8.0'
 	
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	compileOnly 'org.projectlombok:lombok'

@@ -1,5 +1,6 @@
 package com.dev.BrandHunt.Entity;
 
+import com.dev.BrandHunt.Constant.Gender;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -22,4 +23,7 @@ public class Product extends BaseTimeEntity {
     @NotNull
     private int price;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Gender gender;
 }

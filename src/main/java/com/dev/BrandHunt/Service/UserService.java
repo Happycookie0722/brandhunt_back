@@ -20,7 +20,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
-    public boolean userSignUp(@RequestBody SignUpDto request) {
+    public void userSignUp(@RequestBody SignUpDto request) {
         // 이메일 인증 여부
         if (!redisService.isEmailVerified(request.getEmail())) {
             throw new CustomException(ErrorCode.EMAIL_NOT_VERIFIED);
@@ -36,7 +36,7 @@ public class UserService {
 
         User user = User.createUser(request, passwordEncoder);
         userRepository.save(user);
-        return true;
+//        return true;
     }
 
     public boolean isNickNameAvailable(String nickName) {

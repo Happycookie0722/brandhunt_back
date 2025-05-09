@@ -41,13 +41,18 @@ dependencies {
 
 	// 구글 SMTP
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
-
+	
+	// 크롤링
+	// https://mvnrepository.com/artifact/org.seleniumhq.selenium/selenium-java
+	implementation("org.seleniumhq.selenium:selenium-java:4.31.0")
+	
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testImplementation 'it.ozimov:embedded-redis:0.7.3'
 }
 
 tasks.named('test') {

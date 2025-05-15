@@ -24,7 +24,6 @@ public class RedisConfig {
 
     //RedisTemplate 사용을 위한 추가
     @Bean
-    // Redis에 데이터를 저장하고 읽는 등의 작업에 사용하는 템플릿 클래스 생성
     public RedisTemplate<String, String> redisTemplate() {
         // String을 키와 값의 데이터 형식으로 사용
         RedisTemplate<String, String> redisTemplate = new RedisTemplate<>();

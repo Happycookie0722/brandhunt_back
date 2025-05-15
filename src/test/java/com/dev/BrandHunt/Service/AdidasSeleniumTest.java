@@ -43,12 +43,10 @@ public class AdidasSeleniumTest {
             "https://www.adidas.co.kr/men-clothing",
             "https://www.adidas.co.kr/men-bags-accessories",
             "https://www.adidas.co.kr/men-headwear",
-            "https://www.adidas.co.kr/men-socks",
             "https://www.adidas.co.kr/women-shoes",
             "https://www.adidas.co.kr/women-clothing",
             "https://www.adidas.co.kr/women-bags-accessories",
             "https://www.adidas.co.kr/women-headwear",
-            "https://www.adidas.co.kr/women-socks",
         };
 
         for (String url : urls) {

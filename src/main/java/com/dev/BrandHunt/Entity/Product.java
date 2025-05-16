@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 @Getter @Setter @Entity
 @Table(name = "products")
@@ -14,14 +15,17 @@ public class Product extends BaseTimeEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "brand_id")
-    private Brand brand;
+    @JoinColumn(name = "category_id")
+    private Category category;
 
     @NotNull
     private String name;
 
     @NotNull
     private int price;
+
+    @ColumnDefault("0")
+    private int salePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

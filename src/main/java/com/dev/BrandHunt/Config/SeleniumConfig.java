@@ -2,7 +2,6 @@ package com.dev.BrandHunt.Config;
 
 import com.dev.BrandHunt.Constant.SiteType;
 import io.github.bonigarcia.wdm.WebDriverManager;
-import jakarta.annotation.PreDestroy;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
@@ -10,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class SeleniumConfig {
+
     public WebDriver createWebDriver(SiteType siteType) {
         WebDriverManager.chromedriver().setup();
 
@@ -26,19 +26,6 @@ public class SeleniumConfig {
         if (siteType == SiteType.ADIDAS) {
             options.addArguments("--blink-settings=imagesEnabled=false");
         }
-
         return new ChromeDriver(options);
-    }
-
-    // 서버 종료시점에 일괄 종료 시킬 수 있음
-    @PreDestroy
-    public void quitDriver(WebDriver driver) {
-        if (driver != null) {
-            try {
-                driver.quit();
-            } catch (Exception e) {
-                e.getMessage();
-            }
-        }
     }
 }

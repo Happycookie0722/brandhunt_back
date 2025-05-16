@@ -2,6 +2,7 @@ package com.dev.BrandHunt.Service;
 
 import com.dev.BrandHunt.Config.SeleniumConfig;
 import com.dev.BrandHunt.Constant.SiteType;
+import com.dev.BrandHunt.Entity.Product;
 import lombok.RequiredArgsConstructor;
 import org.openqa.selenium.*;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -9,6 +10,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -29,7 +31,6 @@ public class SeleniumService {
                     "https://www.nike.com/kr/w/women-apparel-6ymx6znik1", // 의류
                     "https://www.nike.com/kr/w/women-bags-backpacks-9xy71znik1", // 가방
                     "https://www.nike.com/kr/w/women-hats-visors-headbands-52r49znik1", // 모자 & 헤드밴드
-
             };
 
             for (String url : urls) {
@@ -67,19 +68,20 @@ public class SeleniumService {
                 System.out.println("총 상품 수: " + productCards.size());
 
                 for (WebElement card : productCards) {
+
                     try {
                         String category = card.findElement(By.className("product-card__subtitle")).getText();
                         String name = card.findElement(By.cssSelector(".product-card__title")).getText();
                         String image = card.findElement(By.tagName("img")).getAttribute("src");
 
                         List<WebElement> prices = card.findElements(By.cssSelector(".product-price"));
-                        String originalPrice = !prices.isEmpty() ? prices.get(0).getText() : "없음";
+                        String price = !prices.isEmpty() ? prices.get(0).getText() : "없음";
                         String salePrice = prices.size() == 2 ? prices.get(1).getText() : "-";
 
                         System.out.println("카테고리: " + category);
                         System.out.println("상품명: " + name);
                         System.out.println("이미지: " + image);
-                        System.out.println("정가: " + originalPrice);
+                        System.out.println("정가: " + price);
                         System.out.println("할인가: " + salePrice);
                         System.out.println("----------");
                     } catch (Exception e) {
@@ -90,7 +92,7 @@ public class SeleniumService {
         } catch (Exception e) {
             e.getMessage();
         } finally {
-            seleniumConfig.quitDriver(driver);
+            driver.quit();
         }
     }
 
@@ -195,7 +197,6 @@ public class SeleniumService {
                             System.out.println("이미지: " + image);
                             System.out.println("가격: " + price);
                             System.out.println("세일 가격: " + salePrice);
-                            System.out.println("----------");
                         } catch (Exception e) {
                             System.out.println("상품 파싱 실패: " + e.getMessage());
                         }
@@ -211,7 +212,7 @@ public class SeleniumService {
         } catch (Exception e) {
             e.getMessage();
         } finally {
-            seleniumConfig.quitDriver(driver);
+            driver.quit();
         }
     }
 }

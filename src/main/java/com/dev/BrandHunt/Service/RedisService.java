@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -14,10 +15,19 @@ public class RedisService {
 
     private final StringRedisTemplate redisTemplate;
     public static final String NICKNAME_PREFIX = "nickname:";
-    private static final String VERIFY_PREFIX = "verify:code:";
+    private static final String VERIFY_PREFIX = "verifyCode:";
     private static final String EMAIL_PREFIX = "email:";
     private static final String REFRESH_PREFIX = "refresh:";
+    private static final String POPULAR_PREFIX = "popularKeyword:";
 
+
+    public void delete(String key) {
+        redisTemplate.delete(key);
+    }
+
+    public boolean hasKey(String key) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+    }
 
     // Refresh Token 저장 (7일)
     public void saveRefreshToken(String email, String refreshToken) {
@@ -55,14 +65,17 @@ public class RedisService {
         Object verified = redisTemplate.opsForHash().get(key, "code");
         return "true".equalsIgnoreCase(verified.toString());
     }
-
-    public void delete(String key) {
-        redisTemplate.delete(key);
+    
+    // 검색 키워드 score 증가
+    public void setPopularKeyword(String keyword) {
+        redisTemplate.opsForZSet().incrementScore(POPULAR_PREFIX, keyword, 1);
     }
-
-    public boolean hasKey(String key) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+    
+    // score 높은 순으로 키워드 10개 리턴
+    public List<String> getPopularKeywords() {
+        return redisTemplate.opsForZSet()
+                            .reverseRange("popular:keywords", 0, 9)
+                            .stream()
+                            .toList();
     }
-
-
 }

@@ -5,6 +5,8 @@ import com.dev.BrandHunt.Repository.SearchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class SearchService {
@@ -16,5 +18,7 @@ public class SearchService {
         searchRepository.save(searchLog);
     }
 
-
+    public List<String> getPopularKeyword() {
+        return redisService.getPopularKeywords();
+    }
 }

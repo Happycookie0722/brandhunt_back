@@ -42,7 +42,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/auth/**"
-                                        ,"/users/check-nickname")
+                                        ,"/users/check-nickname"
+                                        // 크롤링 테스트를 위해 임시로 허용. 나중에 삭제학기
+                                        ,"/products/crawling")
                         .permitAll()
                         .anyRequest().authenticated()
                 )

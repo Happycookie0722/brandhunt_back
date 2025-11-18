@@ -16,7 +16,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class SeleniumService {
-    private SeleniumConfig seleniumConfig;
+    private final SeleniumConfig seleniumConfig;
 
     public void getNikeProduct() throws InterruptedException {
         WebDriver driver = seleniumConfig.createWebDriver(SiteType.NIKE);
@@ -49,6 +49,7 @@ public class SeleniumService {
                     wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector(".product-card")));
 
                     int count = driver.findElements(By.cssSelector(".product-card")).size();
+                    System.out.println("스크래핑 시도 횟수: " + sameCount);
                     System.out.println("현재 상품 수: " + count);
 
                     if (count == prevCount) {

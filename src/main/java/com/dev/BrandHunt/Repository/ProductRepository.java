@@ -12,4 +12,5 @@ import java.util.Optional;
 public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findAll();
     List<Product> findByName(ProductDto productDto);
+//    List<Product> findByName(List<String> keyword);
 }

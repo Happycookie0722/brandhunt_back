@@ -22,10 +22,13 @@ public class Product extends BaseTimeEntity {
     private String name;
 
     @NotNull
-    private int price;
+    private String img;
+
+    @NotNull
+    private String price;
 
     @ColumnDefault("0")
-    private int salePrice;
+    private String salePrice;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

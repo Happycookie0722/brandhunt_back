@@ -1,21 +1,28 @@
 package com.dev.BrandHunt.Service;
 
 import com.dev.BrandHunt.Config.SeleniumConfig;
+import com.dev.BrandHunt.Constant.Gender;
 import com.dev.BrandHunt.Constant.SiteType;
+import com.dev.BrandHunt.Entity.Category;
 import com.dev.BrandHunt.Entity.Product;
 import lombok.RequiredArgsConstructor;
 import org.openqa.selenium.*;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class SeleniumService {
+    @Autowired
+    private CategoryService categoryService;
     private final SeleniumConfig seleniumConfig;
 
     public void getNikeProduct() throws InterruptedException {
@@ -23,17 +30,19 @@ public class SeleniumService {
 
         try {
             String[] urls = {
-                    "https://www.nike.com/kr/w/men-shoes-nik1zy7ok", // 신발
-                    "https://www.nike.com/kr/w/men-apparel-6ymx6znik1", // 의류
-                    "https://www.nike.com/kr/w/men-bags-backpacks-9xy71znik1", // 가방
-                    "https://www.nike.com/kr/w/men-hats-visors-headbands-52r49znik1", // 모자 & 헤드밴드
-                    "https://www.nike.com/kr/w/women-shoes-5e1x6zy7ok", // 신발
-                    "https://www.nike.com/kr/w/women-apparel-6ymx6znik1", // 의류
-                    "https://www.nike.com/kr/w/women-bags-backpacks-9xy71znik1", // 가방
-                    "https://www.nike.com/kr/w/women-hats-visors-headbands-52r49znik1", // 모자 & 헤드밴드
+                    "https://www.nike.com/kr/w/men-shoes-nik1zy7ok",                    // 남성신발
+                    "https://www.nike.com/kr/w/men-apparel-6ymx6znik1",                 // 남성의류
+                    "https://www.nike.com/kr/w/men-bags-backpacks-9xy71znik1",          // 남성가방
+                    "https://www.nike.com/kr/w/men-hats-visors-headbands-52r49znik1",   // 남성모자 & 헤드밴드
+                    "https://www.nike.com/kr/w/women-shoes-5e1x6zy7ok",                 // 여성신발
+                    "https://www.nike.com/kr/w/women-apparel-6ymx6znik1",               // 여성의류
+                    "https://www.nike.com/kr/w/women-bags-backpacks-9xy71znik1",        // 여성가방
+                    "https://www.nike.com/kr/w/women-hats-visors-headbands-52r49znik1", // 여성모자 & 헤드밴드
             };
-
+            
             for (String url : urls) {
+                Category category = categoryService.matchCategory(url, categoryService.getCategoryInfo());
+
                 System.out.println("크롤링 시작: " + url);
                 driver.get(url);
 
@@ -71,19 +80,28 @@ public class SeleniumService {
                 for (WebElement card : productCards) {
 
                     try {
-                        String category = card.findElement(By.className("product-card__subtitle")).getText();
+//                        나이키는 카테고리가 세부적으로 나뉘어져 있어서 따로 매핑해야함
+//                        String category = card.findElement(By.className("product-card__subtitle")).getText();
                         String name = card.findElement(By.cssSelector(".product-card__title")).getText();
                         String image = card.findElement(By.tagName("img")).getAttribute("src");
 
                         List<WebElement> prices = card.findElements(By.cssSelector(".product-price"));
                         String price = !prices.isEmpty() ? prices.get(0).getText() : "없음";
-                        String salePrice = prices.size() == 2 ? prices.get(1).getText() : "-";
+                        String salePrice = prices.size() == 2 ? prices.get(1).getText() : "0";
 
+                        Product product = new Product();
                         System.out.println("카테고리: " + category);
+                        product.setCategory(category);
                         System.out.println("상품명: " + name);
+                        product.setName(name);
                         System.out.println("이미지: " + image);
+                        product.setImg(image);
                         System.out.println("정가: " + price);
+                        product.setPrice(price);
                         System.out.println("할인가: " + salePrice);
+                        product.setSalePrice(salePrice);
+                        if(url.contains("men")) product.setGender(Gender.MALE);
+                        else if (url.contains("women")) product.setGender(Gender.FEMALE);
                         System.out.println("----------");
                     } catch (Exception e) {
                         System.out.println("상품 파싱 실패: " + e.getMessage());

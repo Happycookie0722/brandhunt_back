@@ -24,6 +24,10 @@ public class PriceAlertService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
 
+    public boolean isPriceAlertEnabled(Long productId, Long userId) {
+        return priceAlertRepository.findByUserIdAndProductId(userId, productId).isPresent();
+    }
+
     @Transactional
     public boolean togglePriceAlert(Long productId, Long userId) {
         Product product = productRepository.findById(productId)

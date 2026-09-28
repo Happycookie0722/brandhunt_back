@@ -4,6 +4,7 @@ import com.dev.BrandHunt.Common.CustomException;
 import com.dev.BrandHunt.Constant.ErrorCode;
 import com.dev.BrandHunt.DTO.CrawlResultDto;
 import com.dev.BrandHunt.DTO.ProductCrawlDto;
+import com.dev.BrandHunt.DTO.ProductDetailDto;
 import com.dev.BrandHunt.DTO.ProductDto;
 import com.dev.BrandHunt.Entity.Brand;
 import com.dev.BrandHunt.Entity.Category;
@@ -16,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +27,7 @@ public class ProductService {
     private final CategoryService categoryService;
     private final SearchService searchService;
     private final SeleniumService seleniumService;
+    private final PriceAlertService priceAlertService;
 
     public List<Product> getProducts() {
         try {
@@ -32,6 +35,23 @@ public class ProductService {
         } catch (Exception e) {
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    public ProductDetailDto getProductDetail(Long productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        return ProductDetailDto.builder()
+                .id(product.getId())
+                .brand(product.getBrand() == null ? null : product.getBrand().getName())
+                .category(product.getCategory() == null ? null : product.getCategory().getName())
+                .name(product.getName())
+                .imageUrl(product.getImg())
+                .price(product.getPrice())
+                .salePrice(product.getSalePrice())
+                .productUrl(product.getProductUrl())
+                .gender(product.getGender() == null ? null : product.getGender().name())
+                .build();
     }
 
     public List<Product> findProduct(ProductDto productDto) {
@@ -61,8 +81,7 @@ public class ProductService {
             int updated = 0;
 
             for (ProductCrawlDto dto : crawledProducts) {
-                if (dto.getName() == null || dto.getName().isBlank()
-                        || dto.getExternalProductId() == null || dto.getExternalProductId().isBlank()) {
+                if (dto.getName() == null || dto.getName().isBlank()) {
                     continue;
                 }
 
@@ -73,26 +92,45 @@ public class ProductService {
                             return brandRepository.save(newBrand);
                         });
 
+                String crawledPrice = dto.getOriginalPrice() == null ? "0" : dto.getOriginalPrice();
+                String crawledSalePrice = dto.getSalePrice() == null ? "0" : dto.getSalePrice();
+
                 Product product = productRepository
-                        .findByBrandIdAndExternalProductId(brand.getId(), dto.getExternalProductId())
-                        .orElseGet(() -> new Product());
+                        .findByBrandIdAndNameIgnoreCase(brand.getId(), dto.getName().trim())
+                        .orElse(null);
 
-                boolean isNew = product.getId() == null;
+                if (product == null) {
+                    product = new Product();
+                    product.setBrand(brand);
+                    product.setCategory(findCategory(dto.getCategory(), categories));
+                    product.setName(dto.getName().trim());
+                    product.setImg(dto.getImageUrl());
+                    product.setPrice(crawledPrice);
+                    product.setSalePrice(crawledSalePrice);
+                    product.setProductUrl(dto.getProductUrl());
+                    product.setExternalProductId(dto.getExternalProductId());
+                    product.setGender(dto.getGender());
 
-                product.setBrand(brand);
-                product.setCategory(findCategory(dto.getCategory(), categories));
-                product.setName(dto.getName());
-                product.setImg(dto.getImageUrl());
-                product.setPrice(dto.getOriginalPrice() == null ? "0" : dto.getOriginalPrice());
-                product.setSalePrice(dto.getSalePrice() == null ? "0" : dto.getSalePrice());
-                product.setProductUrl(dto.getProductUrl());
-                product.setExternalProductId(dto.getExternalProductId());
-                product.setGender(dto.getGender());
+                    productRepository.save(product);
+                    inserted++;
+                    continue;
+                }
 
-                productRepository.save(product);
+                String previousSalePrice = product.getSalePrice();
+                boolean salePriceChanged = !Objects.equals(previousSalePrice, crawledSalePrice);
+                boolean originalPriceChanged = !Objects.equals(product.getPrice(), crawledPrice);
 
-                if (isNew) inserted++;
-                else updated++;
+                if (salePriceChanged || originalPriceChanged) {
+                    product.setPrice(crawledPrice);
+                    product.setSalePrice(crawledSalePrice);
+                    productRepository.save(product);
+                    updated++;
+
+                    if (salePriceChanged) {
+                        priceAlertService.createPriceChangeNotifications(
+                                product, previousSalePrice, crawledSalePrice);
+                    }
+                }
             }
 
             return CrawlResultDto.builder()

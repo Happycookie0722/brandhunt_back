@@ -2,9 +2,9 @@ package com.dev.BrandHunt.Controller;
 
 import com.dev.BrandHunt.DTO.ProductDto;
 import com.dev.BrandHunt.DTO.ProductDetailDto;
+import com.dev.BrandHunt.Security.UserPrincipal;
 import com.dev.BrandHunt.Service.PriceAlertService;
 import com.dev.BrandHunt.Service.ProductService;
-import com.dev.BrandHunt.Security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

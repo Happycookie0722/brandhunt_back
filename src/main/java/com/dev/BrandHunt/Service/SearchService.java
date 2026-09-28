@@ -16,6 +16,9 @@ public class SearchService {
 
     public void recordSearch(SearchLog searchLog) {
         searchRepository.save(searchLog);
+        if (searchLog.getKeyword() != null && !searchLog.getKeyword().isBlank()) {
+            redisService.setPopularKeyword(searchLog.getKeyword().trim());
+        }
     }
 
     public List<String> getPopularKeyword() {

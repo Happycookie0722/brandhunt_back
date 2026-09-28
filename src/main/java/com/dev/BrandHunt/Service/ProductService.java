@@ -71,7 +71,7 @@ public class ProductService {
                 .build();
     }
 
-    public List<Product> findProduct(ProductDto productDto) {
+    public List<ProductListDto> findProduct(ProductDto productDto) {
         String keyword = productDto.getName();
         if (keyword == null || keyword.isBlank()) {
             throw new CustomException(ErrorCode.EMPTY_SEARCH_QUERY);
@@ -79,7 +79,9 @@ public class ProductService {
 
         try {
             searchService.recordSearch(new SearchLog(keyword));
-            return productRepository.findByNameContainingIgnoreCase(keyword.trim());
+            return productRepository.findByNameContainingIgnoreCase(keyword.trim()).stream()
+                    .map(this::toListDto)
+                    .toList();
         } catch (CustomException e) {
             throw e;
         } catch (Exception e) {

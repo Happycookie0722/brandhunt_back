@@ -6,10 +6,8 @@ import com.dev.BrandHunt.DTO.ProductDto;
 import com.dev.BrandHunt.Entity.Product;
 import com.dev.BrandHunt.Entity.SearchLog;
 import com.dev.BrandHunt.Repository.ProductRepository;
-import com.dev.BrandHunt.Repository.SearchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.PostMapping;
 
 import java.util.List;
 
@@ -37,9 +35,16 @@ public class ProductService {
 //    }
 
     public List<Product> findProduct(ProductDto productDto) {
+        String keyword = productDto.getName();
+        if (keyword == null || keyword.isBlank()) {
+            throw new CustomException(ErrorCode.EMPTY_SEARCH_QUERY);
+        }
+
         try {
-            searchService.recordSearch(new SearchLog(productDto.getName()));
-            return productRepository.findByName(productDto);
+            searchService.recordSearch(new SearchLog(keyword));
+            return productRepository.findByNameContainingIgnoreCase(keyword.trim());
+        } catch (CustomException e) {
+            throw e;
         } catch (Exception e) {
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
         }

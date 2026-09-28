@@ -5,6 +5,7 @@ import com.dev.BrandHunt.Constant.ErrorCode;
 import com.dev.BrandHunt.DTO.CrawlResultDto;
 import com.dev.BrandHunt.DTO.ProductCrawlDto;
 import com.dev.BrandHunt.DTO.ProductDetailDto;
+import com.dev.BrandHunt.DTO.ProductListDto;
 import com.dev.BrandHunt.DTO.ProductDto;
 import com.dev.BrandHunt.Entity.Brand;
 import com.dev.BrandHunt.Entity.Category;
@@ -29,12 +30,28 @@ public class ProductService {
     private final SeleniumService seleniumService;
     private final PriceAlertService priceAlertService;
 
-    public List<Product> getProducts() {
+    public List<ProductListDto> getProducts() {
         try {
-            return productRepository.findAll();
+            return productRepository.findAll().stream()
+                    .map(this::toListDto)
+                    .toList();
         } catch (Exception e) {
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private ProductListDto toListDto(Product product) {
+        return ProductListDto.builder()
+                .id(product.getId())
+                .brand(product.getBrand() == null ? null : product.getBrand().getName())
+                .category(product.getCategory() == null ? null : product.getCategory().getName())
+                .name(product.getName())
+                .imageUrl(product.getImg())
+                .price(product.getPrice())
+                .salePrice(product.getSalePrice())
+                .productUrl(product.getProductUrl())
+                .gender(product.getGender() == null ? null : product.getGender().name())
+                .build();
     }
 
     public ProductDetailDto getProductDetail(Long productId) {

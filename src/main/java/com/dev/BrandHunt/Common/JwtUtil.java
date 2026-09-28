@@ -9,8 +9,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
-import java.util.concurrent.TimeUnit;
 
 @Component
 @RequiredArgsConstructor
@@ -30,11 +30,11 @@ public class JwtUtil {
     private final RedisTemplate<String, String> redisTemplate;
     @PostConstruct
     public void init() {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes());
+        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateAccessToken(String email) {
-        return generateToken(email, refreshTokenExpiration);
+        return generateToken(email, accessTokenExpiration);
     }
 
     public String generateRefreshToken(String email) {

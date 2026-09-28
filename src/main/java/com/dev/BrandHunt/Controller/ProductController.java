@@ -39,6 +39,14 @@ public class ProductController {
         return ResponseEntity.ok(productService.crawlingItem());
     }
 
+    @GetMapping("/{productId}/price-alert")
+    public ResponseEntity<Boolean> getPriceAlertStatus(
+            @PathVariable Long productId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        return ResponseEntity.ok(
+                priceAlertService.isPriceAlertEnabled(productId, userPrincipal.getUser().getId()));
+    }
+
     @PostMapping("/{productId}/price-alert")
     public ResponseEntity<Boolean> togglePriceAlert(
             @PathVariable Long productId,

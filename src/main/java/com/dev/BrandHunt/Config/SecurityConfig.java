@@ -2,7 +2,6 @@ package com.dev.BrandHunt.Config;
 
 import com.dev.BrandHunt.Security.JwtAuthenticationFilter;
 import com.dev.BrandHunt.Security.CustomUserDetailService;
-import jakarta.servlet.Filter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,8 +44,7 @@ public class SecurityConfig {
                                 "/users/check-nickname",
                                 "/products/list",
                                 "/products/search",
-                                "/search/popular",
-                                "/products/crawling")
+                                "/search/popular")
                         .permitAll()
                         .anyRequest().authenticated()
                 )

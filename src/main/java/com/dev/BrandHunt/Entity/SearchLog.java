@@ -13,6 +13,9 @@ import java.time.LocalDateTime;
 
 @Entity @Getter @Setter
 public class SearchLog {
+    protected SearchLog() {
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

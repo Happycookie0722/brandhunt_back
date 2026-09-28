@@ -9,8 +9,6 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestBody;
-
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -20,14 +18,14 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
-    public void userSignUp(@RequestBody SignUpDto request) {
+    public void userSignUp(SignUpDto request) {
         // 이메일 인증 여부
         if (!redisService.isEmailVerified(request.getEmail())) {
             throw new CustomException(ErrorCode.EMAIL_NOT_VERIFIED);
         }
 
         // 이메일 중복 여부
-        if (!userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(request.getEmail())) {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 

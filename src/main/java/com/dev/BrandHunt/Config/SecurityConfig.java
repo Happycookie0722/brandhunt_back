@@ -2,7 +2,6 @@ package com.dev.BrandHunt.Config;
 
 import com.dev.BrandHunt.Security.JwtAuthenticationFilter;
 import com.dev.BrandHunt.Security.CustomUserDetailService;
-import jakarta.servlet.Filter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,10 +40,11 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/auth/**"
-                                        ,"/users/check-nickname"
-                                        // 크롤링 테스트를 위해 임시로 허용. 나중에 삭제학기
-                                        ,"/products/crawling")
+                                "/auth/**",
+                                "/users/check-nickname",
+                                "/products/list",
+                                "/products/search",
+                                "/search/popular")
                         .permitAll()
                         .anyRequest().authenticated()
                 )

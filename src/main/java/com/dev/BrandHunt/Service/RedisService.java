@@ -31,17 +31,17 @@ public class RedisService {
 
     // Refresh Token 저장 (7일)
     public void saveRefreshToken(String email, String refreshToken) {
-        redisTemplate.opsForValue().set(email, refreshToken, Duration.ofDays(7));
+        redisTemplate.opsForValue().set(REFRESH_PREFIX + email, refreshToken, Duration.ofDays(7));
     }
 
     // Refresh Token 조회
     public String getRefreshToken(String email) {
-        return redisTemplate.opsForValue().get(email);
+        return redisTemplate.opsForValue().get(REFRESH_PREFIX + email);
     }
 
     // Refresh Token 삭제
     public void deleteRefreshToken(String email) {
-        redisTemplate.delete(email);
+        redisTemplate.delete(REFRESH_PREFIX + email);
     }
 
     public void setEmailVerification(String key, String value, boolean verified, long timeOut, TimeUnit timeUnit) {
@@ -62,8 +62,8 @@ public class RedisService {
 
     // 회원가입시 이메일 인증 여부 확인
     public Boolean isEmailVerified(String key) {
-        Object verified = redisTemplate.opsForHash().get(key, "code");
-        return "true".equalsIgnoreCase(verified.toString());
+        Object verified = redisTemplate.opsForHash().get(key, "verified");
+        return verified != null && "true".equalsIgnoreCase(verified.toString());
     }
     
     // 검색 키워드 score 증가
@@ -74,7 +74,7 @@ public class RedisService {
     // score 높은 순으로 키워드 10개 리턴
     public List<String> getPopularKeywords() {
         return redisTemplate.opsForZSet()
-                            .reverseRange("popular:keywords", 0, 9)
+                            .reverseRange(POPULAR_PREFIX, 0, 9)
                             .stream()
                             .toList();
     }

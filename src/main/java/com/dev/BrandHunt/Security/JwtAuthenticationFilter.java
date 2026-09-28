@@ -39,14 +39,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         jwt = authHeader.substring(7); // "Bearer " 이후 문자열만 추출
+
+        if (!jwtUtil.isTokenValid(jwt)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         email = jwtUtil.extractEmail(jwt);
 
         // 2. 인증 컨텍스트에 인증된 사용자가 없을 경우
         if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-            if (jwtUtil.isTokenValid(jwt)) {
-                UsernamePasswordAuthenticationToken authToken =
+            UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
                                 userDetails,
                                 null,
@@ -56,8 +61,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         new WebAuthenticationDetailsSource().buildDetails(request)
                 );
 
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-            }
+            SecurityContextHolder.getContext().setAuthentication(authToken);
         }
 
         // 3. 다음 필터 실행

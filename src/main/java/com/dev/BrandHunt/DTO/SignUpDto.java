@@ -1,9 +1,10 @@
 package com.dev.BrandHunt.DTO;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
-import org.hibernate.validator.constraints.Length;
 
 @Getter
 public class SignUpDto {
@@ -15,6 +16,7 @@ public class SignUpDto {
     private String password;
 
     @NotBlank(message = "MISSING_REQUIRED_FIELDS")
-    @Length(min = 2, max = 20)
+    @Size(min = 2, max = 20, message = "FIELD_TOO_LONG")
+    @JsonAlias("nickname")
     private String nickName;
 }

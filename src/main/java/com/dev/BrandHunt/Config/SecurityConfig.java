@@ -41,10 +41,12 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/auth/**"
-                                        ,"/users/check-nickname"
-                                        // 크롤링 테스트를 위해 임시로 허용. 나중에 삭제학기
-                                        ,"/products/crawling")
+                                "/auth/**",
+                                "/users/check-nickname",
+                                "/products/list",
+                                "/products/search",
+                                "/search/popular",
+                                "/products/crawling")
                         .permitAll()
                         .anyRequest().authenticated()
                 )

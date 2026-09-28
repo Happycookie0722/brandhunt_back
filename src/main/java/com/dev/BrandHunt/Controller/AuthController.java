@@ -90,7 +90,7 @@ public class AuthController {
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<?> userSignUp(@RequestBody SignUpDto request) {
+    public ResponseEntity<?> userSignUp(@Valid @RequestBody SignUpDto request) {
         userService.userSignUp(request);
         return ResponseEntity.ok("회원가입 완료");
     }

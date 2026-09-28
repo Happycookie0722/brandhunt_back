@@ -47,7 +47,7 @@ public class SecurityConfig {
                                 "/products/search",
                                 "/search/popular")
                         .permitAll()
-                        .requestMatchers(HttpMethod.GET, "/products/{productId}")
+                        .requestMatchers(HttpMethod.GET, "/products/*")
                         .permitAll()
                         .anyRequest().authenticated()
                 )

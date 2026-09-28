@@ -9,12 +9,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-@Table(name = "price_alerts",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_price_alert_user_product",
-                columnNames = {"user_id", "product_id"}
-        ))
-public class PriceAlert extends BaseTimeEntity {
+public class Notification extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -27,8 +22,16 @@ public class PriceAlert extends BaseTimeEntity {
     @JoinColumn(name = "product_id")
     private Product product;
 
-    public PriceAlert(User user, Product product) {
+    @Column(nullable = false, length = 500)
+    private String message;
+
+    @Column(nullable = false)
+    private boolean read;
+
+    public Notification(User user, Product product, String message) {
         this.user = user;
         this.product = product;
+        this.message = message;
+        this.read = false;
     }
 }

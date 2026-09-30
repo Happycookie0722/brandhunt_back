@@ -15,8 +15,22 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * [교육용 설명]
+ * SeleniumService는 실제 브랜드 웹사이트를 브라우저처럼 열어 상품 정보를 수집한다.
+ *
+ * 흐름:
+ * Controller -> ProductService.crawlingItem()
+ * -> SeleniumService.getNikeProduct()/getAdidasProduct()
+ * -> ProductCrawlDto 목록 반환
+ * -> ProductService가 DB 저장/갱신
+ *
+ * 이 클래스의 책임은 웹에서 데이터를 읽는 것까지다.
+ * DB 저장과 사용자 노출 여부는 ProductService가 결정한다.
+ */
 @Service
 @RequiredArgsConstructor
+
 public class SeleniumService {
     private final CategoryService categoryService;
     private final SeleniumConfig seleniumConfig;
@@ -73,6 +87,8 @@ public class SeleniumService {
                         List<WebElement> prices = card.findElements(By.cssSelector(".product-price"));
                         String originalPrice = !prices.isEmpty() ? prices.get(0).getText() : null;
                         String salePrice = prices.size() > 1 ? prices.get(1).getText() : null;
+                        // 브랜드 사이트에서 카드 자체에 품절 표시가 있으면 판매 불가 상품으로 기록한다.
+                        boolean soldOut = card.getText().contains("품절");
                         Gender gender = url.contains("/men-") ? Gender.MALE : Gender.FEMALE;
 
                         products.add(ProductCrawlDto.builder()
@@ -85,6 +101,7 @@ public class SeleniumService {
                                 .originalPrice(originalPrice)
                                 .salePrice(salePrice)
                                 .gender(gender)
+                                .soldOut(soldOut)
                                 .build());
                     } catch (Exception e) {
                         System.out.println("나이키 상품 파싱 실패: " + e.getMessage());
@@ -168,6 +185,7 @@ public class SeleniumService {
                                     .originalPrice(originalPrice)
                                     .salePrice(salePrice)
                                     .gender(gender)
+                                    .soldOut(!soldOut.isEmpty())
                                     .build());
                         } catch (Exception e) {
                             System.out.println("아디다스 상품 파싱 실패: " + e.getMessage());

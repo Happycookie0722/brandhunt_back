@@ -10,9 +10,9 @@ import com.dev.BrandHunt.Repository.NotificationRepository;
 import com.dev.BrandHunt.Repository.PriceAlertRepository;
 import com.dev.BrandHunt.Repository.ProductRepository;
 import com.dev.BrandHunt.Repository.UserRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 

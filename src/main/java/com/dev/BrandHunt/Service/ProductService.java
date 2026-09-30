@@ -13,10 +13,13 @@ import com.dev.BrandHunt.Entity.Product;
 import com.dev.BrandHunt.Entity.SearchLog;
 import com.dev.BrandHunt.Repository.BrandRepository;
 import com.dev.BrandHunt.Repository.ProductRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.PreparedStatement;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -30,13 +33,14 @@ import java.util.Set;
  *
  * Controller는 HTTP 요청/응답을 담당하고,
  * SeleniumService는 웹사이트에서 데이터를 가져오며,
- * ProductRepository는 DB 접근을 담당한다.
- * 그 사이에서 실제 업무 규칙을 결정하는 곳이 ProductService다.
+ * ProductRepository/JdbcTemplate은 DB 접근을 담당한다.
+ * 그 사이에서 실제 업무 규칙과 크롤링 동기화 전략을 결정하는 곳이 ProductService다.
  */
 @Service
 @RequiredArgsConstructor
-
 public class ProductService {
+
+    private static final int JDBC_BATCH_SIZE = 50;
 
     private final ProductRepository productRepository;
     private final BrandRepository brandRepository;
@@ -44,10 +48,8 @@ public class ProductService {
     private final SearchService searchService;
     private final SeleniumService seleniumService;
     private final PriceAlertService priceAlertService;
+    private final JdbcTemplate jdbcTemplate;
 
-    /**
-     * 현재 판매 중인 상품만 목록으로 반환한다.
-     */
     public List<ProductListDto> getProducts() {
         try {
             return productRepository.findByActiveTrue().stream()
@@ -58,10 +60,6 @@ public class ProductService {
         }
     }
 
-    /**
-     * Entity를 API 응답 DTO로 변환한다.
-     * Entity를 그대로 반환하지 않는 이유는 DB 구조와 API 구조를 분리하기 위해서다.
-     */
     private ProductListDto toListDto(Product product) {
         return ProductListDto.builder()
                 .id(product.getId())
@@ -76,12 +74,6 @@ public class ProductService {
                 .build();
     }
 
-    /**
-     * 상품 상세 정보를 조회한다.
-     *
-     * active=true 조건을 함께 검사하기 때문에
-     * 판매 종료 상품의 상세 URL을 직접 호출해도 정상 상품처럼 노출하지 않는다.
-     */
     public ProductDetailDto getProductDetail(Long productId) {
         Product product = productRepository.findByIdAndActiveTrue(productId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PRODUCT_NOT_FOUND));
@@ -99,10 +91,6 @@ public class ProductService {
                 .build();
     }
 
-    /**
-     * 상품명을 검색한다.
-     * 검색 결과도 active 상품으로 제한하여 판매 종료 상품이 다시 나타나는 것을 막는다.
-     */
     public List<ProductListDto> findProduct(ProductDto productDto) {
         String keyword = productDto.getName();
 
@@ -127,58 +115,37 @@ public class ProductService {
     }
 
     /**
-     * 브랜드 사이트를 크롤링하고 DB의 상품 상태를 동기화한다.
+     * 크롤링 결과를 DB와 동기화한다.
      *
-     * 핵심 규칙:
-     * 1. 이번 크롤링에서 확인된 판매 가능 상품 -> active=true
-     * 2. 이번 크롤링에서 품절로 확인된 상품 -> active=false
-     * 3. 해당 브랜드의 이번 크롤링 결과에서 아예 사라진 기존 상품 -> active=false
-     * 4. 다음 크롤링에서 다시 등장하면 active=true로 복구
+     * 성능상 중요한 원칙:
+     * 1. 상품 1개마다 SELECT하지 않는다.
+     *    브랜드별 기존 상품을 한 번에 읽어서 메모리 Map으로 비교한다.
+     * 2. 신규 상품 INSERT는 JdbcTemplate.batchUpdate()로 묶는다.
+     * 3. 기존 상품 UPDATE는 관리 중인 JPA Entity의 dirty checking에 맡기고
+     *    Hibernate JDBC batching으로 묶는다.
+     * 4. 판매 종료 상품 UPDATE는 IN 절을 이용한 bulk UPDATE로 처리한다.
      *
-     * 따라서 DB는 상품의 "현재 판매 여부"를 함께 관리하게 된다.
+     * 따라서 1,000개 상품을 처리하더라도 DB round trip을
+     * "상품 수에 비례하는 형태"에서 "배치 수에 비례하는 형태"로 줄인다.
      */
     @Transactional
     public CrawlResultDto crawlingItem() {
         try {
             List<ProductCrawlDto> nikeProducts = seleniumService.getNikeProduct();
             List<ProductCrawlDto> adidasProducts = seleniumService.getAdidasProduct();
-
             List<Category> categories = categoryService.getCategoryInfo();
 
-            int inserted = 0;
-            int updated = 0;
+            Map<String, Set<String>> crawledProductsByBrand = new HashMap<>();
 
-            Map<String, Set<String>> crawledExternalIdsByBrand = new HashMap<>();
+            SyncResult nikeResult = syncBrandProducts(nikeProducts, categories, crawledProductsByBrand);
+            SyncResult adidasResult = syncBrandProducts(adidasProducts, categories, crawledProductsByBrand);
 
-            for (ProductCrawlDto dto : nikeProducts) {
-                if (processCrawledProduct(dto, categories)) {
-                    inserted++;
-                } else {
-                    updated++;
-                }
-                registerSeenProduct(crawledExternalIdsByBrand, dto);
-            }
-
-            for (ProductCrawlDto dto : adidasProducts) {
-                if (processCrawledProduct(dto, categories)) {
-                    inserted++;
-                } else {
-                    updated++;
-                }
-                registerSeenProduct(crawledExternalIdsByBrand, dto);
-            }
-
-            /*
-             * 상품 목록에서 완전히 사라진 상품을 비활성화한다.
-             * 단, 크롤링 결과가 0건이면 사이트 장애/셀렉터 변경 가능성이 있으므로
-             * 기존 상품을 전부 비활성화하지 않는다.
-             */
-            deactivateMissingProducts(crawledExternalIdsByBrand);
+            deactivateMissingProducts(crawledProductsByBrand);
 
             return CrawlResultDto.builder()
-                    .total(inserted + updated)
-                    .inserted(inserted)
-                    .updated(updated)
+                    .total(nikeResult.total() + adidasResult.total())
+                    .inserted(nikeResult.inserted() + adidasResult.inserted())
+                    .updated(nikeResult.updated() + adidasResult.updated())
                     .build();
 
         } catch (CustomException e) {
@@ -189,163 +156,324 @@ public class ProductService {
     }
 
     /**
-     * 크롤링 결과 한 건을 DB에 반영한다.
+     * 브랜드 하나의 크롤링 결과를 일괄 동기화한다.
      *
-     * @return true면 신규 상품, false면 기존 상품
+     * 이 메서드 내부의 for문 자체는 문제가 아니다.
+     * 중요한 것은 for문 안에서 DB를 호출하지 않는 것이다.
+     * 모든 비교는 메모리 Map에서 수행하고, DB 작업은 마지막에 배치로 실행한다.
      */
-    private boolean processCrawledProduct(ProductCrawlDto dto, List<Category> categories) {
-        if (dto.getName() == null || dto.getName().isBlank()) {
-            return false;
+    private SyncResult syncBrandProducts(
+            List<ProductCrawlDto> crawledProducts,
+            List<Category> categories,
+            Map<String, Set<String>> crawledProductsByBrand) {
+
+        if (crawledProducts == null || crawledProducts.isEmpty()) {
+            return new SyncResult(0, 0, 0);
         }
 
-        Brand brand = brandRepository.findByNameIgnoreCase(dto.getBrand())
+        String brandName = crawledProducts.get(0).getBrand();
+        if (brandName == null || brandName.isBlank()) {
+            return new SyncResult(0, 0, 0);
+        }
+
+        Brand brand = brandRepository.findByNameIgnoreCase(brandName)
                 .orElseGet(() -> {
                     Brand newBrand = new Brand();
-                    newBrand.setName(dto.getBrand());
+                    newBrand.setName(brandName);
                     return brandRepository.save(newBrand);
                 });
 
-        String name = dto.getName().trim();
-        String crawledPrice = dto.getOriginalPrice() == null ? "0" : dto.getOriginalPrice();
-        String crawledSalePrice = dto.getSalePrice() == null ? "0" : dto.getSalePrice();
+        /*
+         * 여기서 딱 한 번만 해당 브랜드의 기존 상품을 읽는다.
+         * 이후 1,000개 상품을 비교할 때는 DB를 조회하지 않고 Map을 사용한다.
+         */
+        List<Product> existingProducts = productRepository.findByBrandId(brand.getId());
+
+        Map<String, Product> productsByExternalId = new HashMap<>();
+        Map<String, Product> productsByName = new HashMap<>();
+
+        for (Product product : existingProducts) {
+            if (product.getExternalProductId() != null && !product.getExternalProductId().isBlank()) {
+                productsByExternalId.put(product.getExternalProductId(), product);
+            }
+            if (product.getName() != null && !product.getName().isBlank()) {
+                productsByName.put(normalize(product.getName()), product);
+            }
+        }
+
+        List<Product> newProducts = new ArrayList<>();
+        Set<String> pendingInsertKeys = new HashSet<>();
+
+        int updated = 0;
+
+        for (ProductCrawlDto dto : crawledProducts) {
+            if (dto.getName() == null || dto.getName().isBlank()) {
+                continue;
+            }
+
+            String name = dto.getName().trim();
+            Product product = findExistingProduct(
+                    dto,
+                    name,
+                    productsByExternalId,
+                    productsByName
+            );
+
+            if (product == null) {
+                String newProductKey = buildProductKey(dto, name);
+
+                // 동일 크롤링 결과에 같은 상품이 중복으로 들어오는 것도 방지한다.
+                if (!pendingInsertKeys.add(newProductKey)) {
+                    registerSeenProduct(crawledProductsByBrand, dto);
+                    continue;
+                }
+
+                Product newProduct = createProductEntity(dto, brand, name, categories);
+                newProducts.add(newProduct);
+
+                // 같은 실행 안에서 중복 DTO가 다시 들어와도 신규 INSERT를 중복 생성하지 않도록
+                // 메모리 Map에도 등록한다.
+                if (dto.getExternalProductId() != null && !dto.getExternalProductId().isBlank()) {
+                    productsByExternalId.put(dto.getExternalProductId(), newProduct);
+                }
+                productsByName.put(normalize(name), newProduct);
+
+            } else {
+                updateExistingProduct(product, dto, name);
+                updated++;
+            }
+
+            registerSeenProduct(crawledProductsByBrand, dto);
+        }
 
         /*
-         * 외부 상품 ID가 가장 안정적인 식별자다.
-         * 상품명이 변경될 수 있기 때문에 이름보다 먼저 조회한다.
+         * 신규 상품은 IDENTITY PK 때문에 Hibernate JDBC INSERT batching을 사용할 수 없다.
+         * 따라서 JdbcTemplate의 batchUpdate로 INSERT를 직접 배치한다.
          */
-        Product product = null;
+        batchInsertProducts(newProducts, brand);
+
+        return new SyncResult(
+                newProducts.size() + updated,
+                newProducts.size(),
+                updated
+        );
+    }
+
+    private Product findExistingProduct(
+            ProductCrawlDto dto,
+            String name,
+            Map<String, Product> productsByExternalId,
+            Map<String, Product> productsByName) {
 
         if (dto.getExternalProductId() != null && !dto.getExternalProductId().isBlank()) {
-            product = productRepository
-                    .findByBrandIdAndExternalProductId(brand.getId(), dto.getExternalProductId())
-                    .orElse(null);
+            Product product = productsByExternalId.get(dto.getExternalProductId());
+            if (product != null) {
+                return product;
+            }
         }
 
-        // 기존 데이터 호환을 위해 externalProductId가 없던 상품은 이름으로 한 번 더 찾는다.
-        if (product == null) {
-            product = productRepository
-                    .findByBrandIdAndNameIgnoreCase(brand.getId(), name)
-                    .orElse(null);
-        }
+        return productsByName.get(normalize(name));
+    }
 
-        if (product == null) {
-            Product newProduct = new Product();
-            newProduct.setBrand(brand);
-            newProduct.setCategory(findCategory(dto.getCategory(), categories));
-            newProduct.setName(name);
-            newProduct.setImg(dto.getImageUrl());
-            newProduct.setPrice(crawledPrice);
-            newProduct.setSalePrice(crawledSalePrice);
-            newProduct.setProductUrl(dto.getProductUrl());
-            newProduct.setExternalProductId(dto.getExternalProductId());
-            newProduct.setGender(dto.getGender());
+    private Product createProductEntity(
+            ProductCrawlDto dto,
+            Brand brand,
+            String name,
+            List<Category> categories) {
 
-            // 새로 크롤링된 품절 상품은 DB에는 보존하되 사용자에게 노출하지 않는다.
-            newProduct.setActive(!dto.isSoldOut());
+        Product product = new Product();
+        product.setBrand(brand);
+        product.setCategory(findCategory(dto.getCategory(), categories));
+        product.setName(name);
+        product.setImg(dto.getImageUrl());
+        product.setPrice(dto.getOriginalPrice() == null ? "0" : dto.getOriginalPrice());
+        product.setSalePrice(dto.getSalePrice() == null ? "0" : dto.getSalePrice());
+        product.setProductUrl(dto.getProductUrl());
+        product.setExternalProductId(dto.getExternalProductId());
+        product.setGender(dto.getGender());
+        product.setActive(!dto.isSoldOut());
+        return product;
+    }
 
-            productRepository.save(newProduct);
-            return true;
-        }
+    /**
+     * 기존 Entity는 이미 현재 Transaction의 Persistence Context에서 관리되고 있다.
+     * 따라서 productRepository.save(product)를 매번 호출할 필요가 없다.
+     * 필드만 변경하면 Transaction commit/flush 시 Hibernate가 변경 내용을 감지한다.
+     */
+    private void updateExistingProduct(Product product, ProductCrawlDto dto, String name) {
+        String crawledPrice = dto.getOriginalPrice() == null ? "0" : dto.getOriginalPrice();
+        String crawledSalePrice = dto.getSalePrice() == null ? "0" : dto.getSalePrice();
 
         String previousSalePrice = product.getSalePrice();
         boolean salePriceChanged = !Objects.equals(previousSalePrice, crawledSalePrice);
         boolean originalPriceChanged = !Objects.equals(product.getPrice(), crawledPrice);
         boolean activeChanged = product.isActive() == dto.isSoldOut();
 
-        /*
-         * 가격 변경 시 가격만 수정하고,
-         * 판매 상태가 바뀌면 active만 수정한다.
-         * 이미지/URL 등은 현재 요구사항대로 불필요한 변경을 하지 않는다.
-         */
-        if (salePriceChanged || originalPriceChanged || activeChanged) {
-            product.setPrice(crawledPrice);
-            product.setSalePrice(crawledSalePrice);
-            product.setActive(!dto.isSoldOut());
-
-            // 기존 데이터에 외부 ID가 없었다면 이번 크롤링에서 보완한다.
-            if (product.getExternalProductId() == null || product.getExternalProductId().isBlank()) {
-                product.setExternalProductId(dto.getExternalProductId());
-            }
-
-            productRepository.save(product);
-
-            // 실제 할인가가 변경된 경우에만 가격 알림을 생성한다.
-            if (salePriceChanged && product.isActive()) {
-                priceAlertService.createPriceChangeNotifications(
-                        product, previousSalePrice, crawledSalePrice);
-            }
+        if (!salePriceChanged && !originalPriceChanged && !activeChanged) {
+            return;
         }
 
-        return false;
+        product.setPrice(crawledPrice);
+        product.setSalePrice(crawledSalePrice);
+        product.setActive(!dto.isSoldOut());
+
+        if (product.getExternalProductId() == null || product.getExternalProductId().isBlank()) {
+            product.setExternalProductId(dto.getExternalProductId());
+        }
+
+        if (salePriceChanged && product.isActive()) {
+            priceAlertService.createPriceChangeNotifications(
+                    product,
+                    previousSalePrice,
+                    crawledSalePrice
+            );
+        }
     }
 
     /**
-     * 이번 크롤링에서 실제로 확인된 상품 ID를 브랜드별 Set에 기록한다.
-     * Set을 사용하면 같은 상품이 여러 카테고리에 등장해도 중복 처리되지 않는다.
+     * 신규 상품을 50건 단위 JDBC batch로 INSERT한다.
+     *
+     * 1,000건이면 SQL 1,000번을 각각 execute하는 것이 아니라
+     * 50건씩 JDBC batch로 전달하여 네트워크 왕복을 크게 줄인다.
+     *
+     * Product의 ID는 DB AUTO_INCREMENT가 생성하므로 이 경로에서는
+     * 새 Product Entity의 id를 즉시 사용할 필요가 없는 구조로 유지한다.
+     */
+    private void batchInsertProducts(List<Product> products, Brand brand) {
+        if (products.isEmpty()) {
+            return;
+        }
+
+        String sql = """
+                INSERT INTO products
+                (brand_id, category_id, name, img, price, sale_price,
+                 product_url, external_product_id, gender, active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """;
+
+        jdbcTemplate.batchUpdate(
+                sql,
+                products,
+                JDBC_BATCH_SIZE,
+                (PreparedStatement ps, Product product) -> {
+                    ps.setLong(1, brand.getId());
+
+                    if (product.getCategory() == null) {
+                        ps.setObject(2, null);
+                    } else {
+                        ps.setLong(2, product.getCategory().getId());
+                    }
+
+                    ps.setString(3, product.getName());
+                    ps.setString(4, product.getImg());
+                    ps.setString(5, product.getPrice());
+                    ps.setString(6, product.getSalePrice());
+                    ps.setString(7, product.getProductUrl());
+                    ps.setString(8, product.getExternalProductId());
+                    ps.setString(9, product.getGender().name());
+                    ps.setBoolean(10, product.isActive());
+                }
+        );
+    }
+
+    /**
+     * 이번 크롤링에서 실제로 확인된 상품을 브랜드별 Set에 기록한다.
      */
     private void registerSeenProduct(
-            Map<String, Set<String>> crawledExternalIdsByBrand,
+            Map<String, Set<String>> crawledProductsByBrand,
             ProductCrawlDto dto) {
 
         if (dto.getBrand() == null) {
             return;
         }
 
-        Set<String> seenProducts = crawledExternalIdsByBrand
+        Set<String> seenProducts = crawledProductsByBrand
                 .computeIfAbsent(dto.getBrand(), key -> new HashSet<>());
 
-        // 외부 ID가 있으면 가장 안정적인 식별자로 기록한다.
         if (dto.getExternalProductId() != null && !dto.getExternalProductId().isBlank()) {
             seenProducts.add("ID:" + dto.getExternalProductId());
         }
 
-        // 기존 데이터에 외부 ID가 없는 경우도 정리할 수 있도록 상품명도 함께 기록한다.
         if (dto.getName() != null && !dto.getName().isBlank()) {
-            seenProducts.add("NAME:" + dto.getName().trim().toLowerCase());
+            seenProducts.add("NAME:" + normalize(dto.getName()));
         }
     }
 
     /**
-     * 이번 크롤링에서 발견되지 않은 기존 상품을 판매 종료로 간주한다.
+     * 이번 크롤링에서 발견되지 않은 기존 active 상품을 한 번에 비활성화한다.
      *
-     * 주의:
-     * 크롤링 결과가 0건인 브랜드는 셀렉터 오류나 사이트 장애일 수 있으므로
-     * 해당 브랜드의 상품을 일괄 비활성화하지 않는다.
+     * 기존 구현:
+     *   SELECT -> for -> product.setActive(false) -> dirty checking
+     *
+     * 개선 구현:
+     *   SELECT 1회 -> 메모리에서 missing ID 계산 -> UPDATE ... WHERE id IN (...)
+     *
+     * 1,000개 상품이라도 entity별 UPDATE를 만들지 않는다.
      */
-    private void deactivateMissingProducts(Map<String, Set<String>> crawledExternalIdsByBrand) {
-        for (Map.Entry<String, Set<String>> entry : crawledExternalIdsByBrand.entrySet()) {
+    private void deactivateMissingProducts(
+            Map<String, Set<String>> crawledProductsByBrand) {
+
+        for (Map.Entry<String, Set<String>> entry : crawledProductsByBrand.entrySet()) {
             Brand brand = brandRepository.findByNameIgnoreCase(entry.getKey()).orElse(null);
             if (brand == null) {
                 continue;
             }
 
-            Set<String> seenIds = entry.getValue();
+            Set<String> seenProducts = entry.getValue();
 
-            for (Product product : productRepository.findByBrandId(brand.getId())) {
-                String externalId = product.getExternalProductId();
-                String productName = product.getName();
+            List<Long> missingProductIds = productRepository
+                    .findByBrandIdAndActiveTrue(brand.getId())
+                    .stream()
+                    .filter(product -> !isSeenProduct(product, seenProducts))
+                    .map(Product::getId)
+                    .toList();
 
-                boolean seenByExternalId = externalId != null
-                        && !externalId.isBlank()
-                        && seenIds.contains("ID:" + externalId);
+            /*
+             * IN 절은 DB parameter가 너무 커지지 않도록 500건 단위로 나눈다.
+             * 1,000건이면 UPDATE 약 2번으로 끝난다.
+             */
+            for (int start = 0; start < missingProductIds.size(); start += 500) {
+                List<Long> batchIds = missingProductIds.subList(
+                        start,
+                        Math.min(start + 500, missingProductIds.size())
+                );
 
-                boolean seenByName = productName != null
-                        && seenIds.contains("NAME:" + productName.trim().toLowerCase());
-
-                if (!seenByExternalId && !seenByName && product.isActive()) {
-                    product.setActive(false);
-                }
+                productRepository.deactivateByIds(batchIds);
             }
         }
     }
 
-    /**
-     * 크롤링한 카테고리 이름을 실제 Category Entity로 변환한다.
-     */
+    private boolean isSeenProduct(Product product, Set<String> seenProducts) {
+        String externalId = product.getExternalProductId();
+
+        boolean seenByExternalId = externalId != null
+                && !externalId.isBlank()
+                && seenProducts.contains("ID:" + externalId);
+
+        boolean seenByName = product.getName() != null
+                && seenProducts.contains("NAME:" + normalize(product.getName()));
+
+        return seenByExternalId || seenByName;
+    }
+
+    private String buildProductKey(ProductCrawlDto dto, String name) {
+        if (dto.getExternalProductId() != null && !dto.getExternalProductId().isBlank()) {
+            return "ID:" + dto.getExternalProductId();
+        }
+        return "NAME:" + normalize(name);
+    }
+
+    private String normalize(String value) {
+        return value.trim().toLowerCase();
+    }
+
     private Category findCategory(String categoryName, List<Category> categories) {
         if (categoryName == null || categoryName.isBlank()) {
             return null;
         }
         return categoryService.matchCategory(categoryName, categories);
+    }
+
+    private record SyncResult(int total, int inserted, int updated) {
     }
 }

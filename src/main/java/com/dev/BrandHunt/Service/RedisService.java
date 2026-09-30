@@ -14,12 +14,15 @@ import java.util.concurrent.TimeUnit;
 public class RedisService {
 
     private final StringRedisTemplate redisTemplate;
+
     public static final String NICKNAME_PREFIX = "nickname:";
     private static final String VERIFY_PREFIX = "verifyCode:";
-    private static final String EMAIL_PREFIX = "email:";
     private static final String REFRESH_PREFIX = "refresh:";
     private static final String POPULAR_PREFIX = "popularKeyword:";
-
+    private static final String LOGIN_EMAIL_PREFIX = "login:email:";
+    private static final String LOGIN_IP_PREFIX = "login:ip:";
+    private static final String VERIFY_ATTEMPT_PREFIX = "verify:attempt:";
+    private static final String VERIFY_SEND_PREFIX = "verify:send:";
 
     public void delete(String key) {
         redisTemplate.delete(key);
@@ -29,53 +32,84 @@ public class RedisService {
         return Boolean.TRUE.equals(redisTemplate.hasKey(key));
     }
 
-    // Refresh Token 저장 (7일)
+    public long incrementWithExpiry(String key, Duration expiry) {
+        Long count = redisTemplate.opsForValue().increment(key);
+        if (count != null && count == 1L) {
+            redisTemplate.expire(key, expiry);
+        }
+        return count == null ? 0L : count;
+    }
+
+    public void resetLoginAttempts(String email, String ip) {
+        redisTemplate.delete(LOGIN_EMAIL_PREFIX + email);
+        redisTemplate.delete(LOGIN_IP_PREFIX + ip);
+    }
+
+    public long incrementLoginEmailAttempts(String email) {
+        return incrementWithExpiry(LOGIN_EMAIL_PREFIX + email, Duration.ofMinutes(15));
+    }
+
+    public long incrementLoginIpAttempts(String ip) {
+        return incrementWithExpiry(LOGIN_IP_PREFIX + ip, Duration.ofMinutes(15));
+    }
+
+    public long incrementVerificationAttempts(String email) {
+        return incrementWithExpiry(VERIFY_ATTEMPT_PREFIX + email, Duration.ofMinutes(10));
+    }
+
+    public void resetVerificationAttempts(String email) {
+        redisTemplate.delete(VERIFY_ATTEMPT_PREFIX + email);
+    }
+
+    public long incrementVerificationSendAttempts(String email) {
+        return incrementWithExpiry(VERIFY_SEND_PREFIX + email, Duration.ofMinutes(10));
+    }
+
     public void saveRefreshToken(String email, String refreshToken) {
         redisTemplate.opsForValue().set(REFRESH_PREFIX + email, refreshToken, Duration.ofDays(7));
     }
 
-    // Refresh Token 조회
     public String getRefreshToken(String email) {
         return redisTemplate.opsForValue().get(REFRESH_PREFIX + email);
     }
 
-    // Refresh Token 삭제
     public void deleteRefreshToken(String email) {
         redisTemplate.delete(REFRESH_PREFIX + email);
     }
 
-    public void setEmailVerification(String key, String value, boolean verified, long timeOut, TimeUnit timeUnit) {
+    public void setEmailVerification(String email, String value, boolean verified, long timeOut, TimeUnit timeUnit) {
+        String key = VERIFY_PREFIX + email;
         redisTemplate.opsForHash().put(key, "code", value);
         redisTemplate.opsForHash().put(key, "verified", String.valueOf(verified));
         redisTemplate.expire(key, timeOut, timeUnit);
     }
 
-    // 이메일로 전송한 코드 일치 확인
-    public String getEmailVerification(String key) {
-        Object code = redisTemplate.opsForHash().get(key, "code");
+    public String getEmailVerification(String email) {
+        Object code = redisTemplate.opsForHash().get(VERIFY_PREFIX + email, "code");
         return Objects.toString(code, null);
     }
 
-    public void setEmailVerified(String key) {
-        redisTemplate.opsForHash().put(key, "verified", true);
+    public void setEmailVerified(String email) {
+        redisTemplate.opsForHash().put(VERIFY_PREFIX + email, "verified", "true");
     }
 
-    // 회원가입시 이메일 인증 여부 확인
-    public Boolean isEmailVerified(String key) {
-        Object verified = redisTemplate.opsForHash().get(key, "verified");
+    public Boolean isEmailVerified(String email) {
+        Object verified = redisTemplate.opsForHash().get(VERIFY_PREFIX + email, "verified");
         return verified != null && "true".equalsIgnoreCase(verified.toString());
     }
-    
-    // 검색 키워드 score 증가
+
+    public void deleteEmailVerification(String email) {
+        redisTemplate.delete(VERIFY_PREFIX + email);
+    }
+
     public void setPopularKeyword(String keyword) {
         redisTemplate.opsForZSet().incrementScore(POPULAR_PREFIX, keyword, 1);
     }
-    
-    // score 높은 순으로 키워드 10개 리턴
+
     public List<String> getPopularKeywords() {
         return redisTemplate.opsForZSet()
-                            .reverseRange(POPULAR_PREFIX, 0, 9)
-                            .stream()
-                            .toList();
+                .reverseRange(POPULAR_PREFIX, 0, 9)
+                .stream()
+                .toList();
     }
 }

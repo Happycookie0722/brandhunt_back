@@ -6,19 +6,20 @@ import com.dev.BrandHunt.DTO.LoginRequestDto;
 import com.dev.BrandHunt.DTO.SignUpDto;
 import com.dev.BrandHunt.DTO.TokenResponseDto;
 import com.dev.BrandHunt.Entity.User;
-import com.dev.BrandHunt.Service.RedisService;
+import com.dev.BrandHunt.Security.UserPrincipal;
 import com.dev.BrandHunt.Service.AuthService;
+import com.dev.BrandHunt.Service.RedisService;
 import com.dev.BrandHunt.Service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
-@Slf4j
 public class AuthController {
 
     private final AuthService authService;
@@ -26,10 +27,16 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final RedisService redisService;
 
-    // 로그인
     @PostMapping("/login")
-    public ResponseEntity<TokenResponseDto> login(@Valid @RequestBody LoginRequestDto request) {
-        User user = authService.authenticate(request.getEmail(), request.getPassword());
+    public ResponseEntity<TokenResponseDto> login(
+            @Valid @RequestBody LoginRequestDto request,
+            HttpServletRequest httpRequest) {
+
+        User user = authService.authenticate(
+                request.getEmail(),
+                request.getPassword(),
+                httpRequest.getRemoteAddr()
+        );
 
         String accessToken = jwtUtil.generateAccessToken(user.getEmail());
         String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
@@ -39,52 +46,51 @@ public class AuthController {
         return ResponseEntity.ok(new TokenResponseDto(accessToken, refreshToken));
     }
 
-    // 토큰 재발급
     @PostMapping("/refresh")
     public ResponseEntity<TokenResponseDto> refresh(@RequestBody TokenResponseDto request) {
         String refreshToken = request.getRefreshToken();
 
-        if (!jwtUtil.isTokenValid(refreshToken)) {
-            throw new IllegalArgumentException("유효하지 않은 Refresh Token입니다.");
+        if (!jwtUtil.isRefreshToken(refreshToken)) {
+            throw new com.dev.BrandHunt.Common.CustomException(
+                    com.dev.BrandHunt.Constant.ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         String email = jwtUtil.extractEmail(refreshToken);
         String storedToken = redisService.getRefreshToken(email);
 
         if (!refreshToken.equals(storedToken)) {
-            throw new IllegalArgumentException("일치하지 않는 Refresh Token입니다.");
+            throw new com.dev.BrandHunt.Common.CustomException(
+                    com.dev.BrandHunt.Constant.ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         String newAccessToken = jwtUtil.generateAccessToken(email);
+        String newRefreshToken = jwtUtil.generateRefreshToken(email);
+        redisService.saveRefreshToken(email, newRefreshToken);
 
-        return ResponseEntity.ok(new TokenResponseDto(newAccessToken, refreshToken));
+        return ResponseEntity.ok(new TokenResponseDto(newAccessToken, newRefreshToken));
     }
 
-    // 로그아웃 (Redis에서 Refresh Token 삭제)
     @PostMapping("/logout")
-    public ResponseEntity<String> logout(@RequestBody TokenResponseDto request) {
-        String refreshToken = request.getRefreshToken();
+    public ResponseEntity<String> logout(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
 
-        if (!jwtUtil.isTokenValid(refreshToken)) {
-            return ResponseEntity.badRequest().body("유효하지 않은 토큰입니다.");
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            jwtUtil.revokeAccessToken(authorization.substring(7));
         }
 
-        String email = jwtUtil.extractEmail(refreshToken);
-        redisService.deleteRefreshToken(email);
-
+        redisService.deleteRefreshToken(userPrincipal.getUser().getEmail());
         return ResponseEntity.ok("로그아웃 완료");
     }
-    
-    // 이메일 인증 메일 전송
+
     @PostMapping("/send-verification")
-    public ResponseEntity<?> sendVerificationCode(@RequestBody EmailVerifyDto request) {
+    public ResponseEntity<?> sendVerificationCode(@Valid @RequestBody EmailVerifyDto request) {
         authService.sendVerificationCode(request.getEmail());
         return ResponseEntity.ok("인증 메일을 전송했습니다.");
     }
-    
-    // 이메일 인증 완료
+
     @PostMapping("/verify-code")
-    public ResponseEntity<?> verifyCode(@RequestBody EmailVerifyDto request) {
+    public ResponseEntity<?> verifyCode(@Valid @RequestBody EmailVerifyDto request) {
         authService.verifyCode(request.getEmail(), request.getCode());
         return ResponseEntity.ok("이메일 인증 완료");
     }

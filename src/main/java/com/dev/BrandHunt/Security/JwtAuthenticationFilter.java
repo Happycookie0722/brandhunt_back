@@ -18,8 +18,7 @@ import java.io.IOException;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    //  모든 요청에 대해 JWT 토큰을 검사하고,
-    //  정상 토큰이면 Spring Security 인증 컨텍스트(SecurityContextHolder) 에 사용자 인증을 등록
+
     private final JwtUtil jwtUtil;
     private final CustomUserDetailService userDetailsService;
 
@@ -28,43 +27,38 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        // 1. Authorization 헤더에서 토큰 추출
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String email;
+        String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response); // 다음 필터로 넘어감
-            return;
-        }
-
-        jwt = authHeader.substring(7); // "Bearer " 이후 문자열만 추출
-
-        if (!jwtUtil.isTokenValid(jwt)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        email = jwtUtil.extractEmail(jwt);
+        String jwt = authHeader.substring(7);
 
-        // 2. 인증 컨텍스트에 인증된 사용자가 없을 경우
+        if (!jwtUtil.isAccessToken(jwt)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        String email = jwtUtil.extractEmail(jwt);
+
         if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
             UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
-                        );
-                authToken.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                );
+                    new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities()
+                    );
+            authToken.setDetails(
+                    new WebAuthenticationDetailsSource().buildDetails(request)
+            );
 
             SecurityContextHolder.getContext().setAuthentication(authToken);
         }
 
-        // 3. 다음 필터 실행
         filterChain.doFilter(request, response);
     }
 }

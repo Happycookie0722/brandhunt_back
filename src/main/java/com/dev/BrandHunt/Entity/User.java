@@ -1,5 +1,6 @@
 package com.dev.BrandHunt.Entity;
 
+import com.dev.BrandHunt.Constant.UserRole;
 import com.dev.BrandHunt.Constant.UserStatus;
 import com.dev.BrandHunt.DTO.SignUpDto;
 import jakarta.persistence.*;
@@ -7,7 +8,6 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.validator.constraints.Length;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -38,8 +38,11 @@ public class User extends BaseTimeEntity {
     @NotNull
     private String password;
 
-    private LocalDateTime last_login_at;
+    @Enumerated(EnumType.STRING)
+    @Column
+    private UserRole role = UserRole.USER;
 
+    private LocalDateTime last_login_at;
     private LocalDateTime password_change_at;
 
     @Enumerated(EnumType.STRING)
@@ -52,6 +55,7 @@ public class User extends BaseTimeEntity {
         user.setEmail(dto.getEmail());
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setNickName(dto.getNickName());
+        user.setRole(UserRole.USER);
         user.setStatus(UserStatus.ACTIVE);
         user.setLast_login_at(LocalDateTime.now());
         user.setPassword_change_at(LocalDateTime.now());

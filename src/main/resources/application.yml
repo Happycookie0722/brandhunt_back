@@ -1,19 +1,23 @@
 spring:
   profiles:
-    active: dev  # ← 기본은 개발용(dev)로 설정
+    active: dev
   application:
     name: BrandHunt
   data:
     redis:
-      host: localhost  # 또는 Redis 서버 주소
-      port: 6379        # 기본 포트
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 jwt:
-  secret: "BrandHunt123BrandHunt123BrandHunt123BrandHunt123"
+  secret: ${JWT_SECRET}
   access:
-    expiration: 1800000  # 30분
+    expiration: ${JWT_ACCESS_EXPIRATION:1800000}
   refresh:
-    expiration: 604800000 # 7일
+    expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+
+app:
+  cors:
+    allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:5173}
 
 server:
   port: 8000

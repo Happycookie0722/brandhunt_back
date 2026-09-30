@@ -48,9 +48,7 @@ public class PriceAlertService {
 
     @Transactional
     public void createPriceChangeNotifications(Product product, String previousSalePrice, String currentSalePrice) {
-        List<PriceAlert> alerts = priceAlertRepository.findAll().stream()
-                .filter(alert -> alert.getProduct().getId().equals(product.getId()))
-                .toList();
+        List<PriceAlert> alerts = priceAlertRepository.findByProductId(product.getId());
 
         String message = product.getName() + "의 할인가가 " +
                 previousSalePrice + "원에서 " + currentSalePrice + "원으로 변경되었습니다.";

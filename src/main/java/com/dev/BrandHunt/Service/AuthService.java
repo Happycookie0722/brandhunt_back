@@ -10,27 +10,39 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.util.concurrent.TimeUnit;
-
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AuthService {
 
+    private static final int MAX_LOGIN_ATTEMPTS = 10;
+    private static final int MAX_VERIFY_ATTEMPTS = 5;
+    private static final int MAX_VERIFY_SEND_ATTEMPTS = 3;
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final RedisService redisService;
     private final MailService mailService;
+    private final SecureRandom secureRandom = new SecureRandom();
 
-    // JWT 로그인 API에서 직접 호출해 인증 수행
-    public User authenticate(String email, String password) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+    public User authenticate(String email, String password, String clientIp) {
+        long emailAttempts = redisService.incrementLoginEmailAttempts(email);
+        long ipAttempts = redisService.incrementLoginIpAttempts(clientIp);
 
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new CustomException(ErrorCode.INVALID_PASSWORD);
+        if (emailAttempts > MAX_LOGIN_ATTEMPTS || ipAttempts > MAX_LOGIN_ATTEMPTS * 3L) {
+            throw new CustomException(ErrorCode.RATE_LIMITED);
         }
+
+        User user = userRepository.findByEmail(email).orElse(null);
+
+        if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
+            throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
+        }
+
+        redisService.resetLoginAttempts(email, clientIp);
 
         if (user.getStatus() == UserStatus.INACTIVE) {
             throw new CustomException(ErrorCode.USER_INACTIVE);
@@ -44,24 +56,27 @@ public class AuthService {
     }
 
     public void sendVerificationCode(String email) {
-        if (userRepository.existsByEmail(email)) {
-            throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        long attempts = redisService.incrementVerificationSendAttempts(email);
+        if (attempts > MAX_VERIFY_SEND_ATTEMPTS) {
+            return;
         }
 
-        // 이미 발급한 이후에 재전송 눌렀을 경우
-        if(redisService.hasKey(email)) {
-            redisService.delete(email);
-//            throw new CustomException(ErrorCode.AUTH_EMAIL_DUPLICATED);
+        // 가입 여부를 응답으로 노출하지 않기 위해 기존 회원에게도 동일한 성공 응답을 반환한다.
+        if (userRepository.existsByEmail(email)) {
+            return;
         }
 
         String code = createRandomCode();
-        boolean verified = false;
-        redisService.setEmailVerification(email, code, verified, 10L, TimeUnit.MINUTES);
+        redisService.setEmailVerification(email, code, false, 10L, TimeUnit.MINUTES);
         mailService.sendVerificationEmail(email, code);
     }
 
-    // 인증 코드 확인
     public void verifyCode(String email, String inputCode) {
+        long attempts = redisService.incrementVerificationAttempts(email);
+        if (attempts > MAX_VERIFY_ATTEMPTS) {
+            throw new CustomException(ErrorCode.RATE_LIMITED);
+        }
+
         String code = redisService.getEmailVerification(email);
 
         if (code == null) {
@@ -72,12 +87,11 @@ public class AuthService {
             throw new CustomException(ErrorCode.INVALID_VERIFY_CODE);
         }
 
-        // 인증 완료 후 verified 값 true 로 변경
         redisService.setEmailVerified(email);
+        redisService.resetVerificationAttempts(email);
     }
 
-    // 인증 코드 생성 (6자리 숫자)
     private String createRandomCode() {
-        return String.valueOf((int) ((Math.random() * 900_000) + 100_000)); // 100000 ~ 999999
+        return String.format("%06d", secureRandom.nextInt(1_000_000));
     }
 }

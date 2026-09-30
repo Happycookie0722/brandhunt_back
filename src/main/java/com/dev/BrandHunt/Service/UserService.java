@@ -5,10 +5,11 @@ import com.dev.BrandHunt.Constant.ErrorCode;
 import com.dev.BrandHunt.DTO.SignUpDto;
 import com.dev.BrandHunt.Entity.User;
 import com.dev.BrandHunt.Repository.UserRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -34,7 +35,6 @@ public class UserService {
 
         User user = User.createUser(request, passwordEncoder);
         userRepository.save(user);
-//        return true;
     }
 
     public boolean isNickNameAvailable(String nickName) {

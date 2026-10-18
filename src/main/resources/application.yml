@@ -1,4 +1,8 @@
 spring:
+  # Load local secrets from .env in the project root.
+  # OS environment variables take precedence over values in this file.
+  config:
+    import: optional:file:.env[.properties]
   profiles:
     active: dev
   application:

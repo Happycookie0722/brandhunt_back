@@ -59,7 +59,7 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/products/*")
                         .permitAll()
-                        .requestMatchers("/products/crawling")
+                        .requestMatchers("/products/crawling", "/admin/scraping")
                         .hasRole("ADMIN")
                         .requestMatchers("/auth/logout")
                         .authenticated()

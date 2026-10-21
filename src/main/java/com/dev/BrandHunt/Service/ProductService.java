@@ -14,6 +14,7 @@ import com.dev.BrandHunt.Entity.SearchLog;
 import com.dev.BrandHunt.Repository.BrandRepository;
 import com.dev.BrandHunt.Repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ import java.util.Set;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProductService {
 
     private static final int JDBC_BATCH_SIZE = 50;
@@ -130,27 +132,43 @@ public class ProductService {
      */
     @Transactional
     public CrawlResultDto crawlingItem() {
+        long startedAt = System.currentTimeMillis();
+        log.info("[스크래핑] 전체 작업 시작");
         try {
+            log.info("[스크래핑][1/4] Nike 상품 수집 시작");
             List<ProductCrawlDto> nikeProducts = seleniumService.getNikeProduct();
+            log.info("[스크래핑][1/4] Nike 상품 수집 완료: {}건", nikeProducts.size());
+            log.info("[스크래핑][2/4] Adidas 상품 수집 시작");
             List<ProductCrawlDto> adidasProducts = seleniumService.getAdidasProduct();
+            log.info("[스크래핑][2/4] Adidas 상품 수집 완료: {}건", adidasProducts.size());
+            log.info("[스크래핑][3/4] DB 동기화 시작 (Nike {}건, Adidas {}건, 총 {}건)",
+                    nikeProducts.size(), adidasProducts.size(), nikeProducts.size() + adidasProducts.size());
             List<Category> categories = categoryService.getCategoryInfo();
 
             Map<String, Set<String>> crawledProductsByBrand = new HashMap<>();
 
             SyncResult nikeResult = syncBrandProducts(nikeProducts, categories, crawledProductsByBrand);
+            log.info("[스크래핑][3/4] Nike DB 동기화 완료: 처리 {}건, 신규 {}건, 갱신 {}건",
+                    nikeResult.total(), nikeResult.inserted(), nikeResult.updated());
             SyncResult adidasResult = syncBrandProducts(adidasProducts, categories, crawledProductsByBrand);
-
+            log.info("[스크래핑][3/4] Adidas DB 동기화 완료: 처리 {}건, 신규 {}건, 갱신 {}건",
+                    adidasResult.total(), adidasResult.inserted(), adidasResult.updated());
+            log.info("[스크래핑][4/4] 기존 상품 누락 여부 확인 및 비활성화 시작");
             deactivateMissingProducts(crawledProductsByBrand);
-
-            return CrawlResultDto.builder()
+            CrawlResultDto result = CrawlResultDto.builder()
                     .total(nikeResult.total() + adidasResult.total())
                     .inserted(nikeResult.inserted() + adidasResult.inserted())
                     .updated(nikeResult.updated() + adidasResult.updated())
                     .build();
-
+            log.info("[스크래핑] 전체 작업 완료: 처리 {}건, 신규 {}건, 갱신 {}건, 소요 {}초",
+                    result.getTotal(), result.getInserted(), result.getUpdated(),
+                    (System.currentTimeMillis() - startedAt) / 1000);
+            return result;
         } catch (CustomException e) {
+            log.error("[스크래핑] 업무 예외로 작업 실패", e);
             throw e;
         } catch (Exception e) {
+            log.error("[스크래핑] 작업 중 예외 발생", e);
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
@@ -205,8 +223,13 @@ public class ProductService {
         Set<String> pendingInsertKeys = new HashSet<>();
 
         int updated = 0;
-
+        int processed = 0;
+        int totalToProcess = crawledProducts.size();
+        log.info("[스크래핑][DB] {} 상품 동기화 시작: 대상 {}건", brandName, totalToProcess);
         for (ProductCrawlDto dto : crawledProducts) {
+            processed++;
+            log.info("[스크래핑][DB] 브랜드={} 진행={}/{} 상품='{}'",
+                    brandName, processed, totalToProcess, dto.getName());
             if (dto.getName() == null || dto.getName().isBlank()) {
                 continue;
             }
@@ -250,8 +273,10 @@ public class ProductService {
          * 신규 상품은 IDENTITY PK 때문에 Hibernate JDBC INSERT batching을 사용할 수 없다.
          * 따라서 JdbcTemplate의 batchUpdate로 INSERT를 직접 배치한다.
          */
+        log.info("[스크래핑][DB] {} 신규 상품 {}건 배치 저장 시작", brandName, newProducts.size());
         batchInsertProducts(newProducts, brand);
-
+        log.info("[스크래핑][DB] {} 동기화 종료: 대상 {}건, 신규 {}건, 기존 처리 {}건",
+                brandName, totalToProcess, newProducts.size(), updated);
         return new SyncResult(
                 newProducts.size() + updated,
                 newProducts.size(),
@@ -414,6 +439,7 @@ public class ProductService {
             Map<String, Set<String>> crawledProductsByBrand) {
 
         for (Map.Entry<String, Set<String>> entry : crawledProductsByBrand.entrySet()) {
+            log.info("[스크래핑][비활성화] {} 기존 상품 확인 시작", entry.getKey());
             Brand brand = brandRepository.findByNameIgnoreCase(entry.getKey()).orElse(null);
             if (brand == null) {
                 continue;
@@ -432,6 +458,7 @@ public class ProductService {
              * IN 절은 DB parameter가 너무 커지지 않도록 500건 단위로 나눈다.
              * 1,000건이면 UPDATE 약 2번으로 끝난다.
              */
+            log.info("[스크래핑][비활성화] {} 비활성화 대상 {}건", entry.getKey(), missingProductIds.size());
             for (int start = 0; start < missingProductIds.size(); start += 500) {
                 List<Long> batchIds = missingProductIds.subList(
                         start,

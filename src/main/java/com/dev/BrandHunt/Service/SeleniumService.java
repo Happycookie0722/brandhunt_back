@@ -6,6 +6,7 @@ import com.dev.BrandHunt.Constant.SiteType;
 import com.dev.BrandHunt.DTO.ProductCrawlDto;
 import com.dev.BrandHunt.Entity.Category;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.openqa.selenium.*;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
@@ -30,13 +31,15 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
-
+@Slf4j
 public class SeleniumService {
     private final CategoryService categoryService;
     private final SeleniumConfig seleniumConfig;
 
     public List<ProductCrawlDto> getNikeProduct() throws InterruptedException {
+        long startedAt = System.currentTimeMillis();
         List<ProductCrawlDto> products = new ArrayList<>();
+        log.info("[스크래핑][Nike] 브라우저 초기화 시작");
         WebDriver driver = seleniumConfig.createWebDriver(SiteType.NIKE);
 
         try {
@@ -53,7 +56,10 @@ public class SeleniumService {
 
             List<Category> categories = categoryService.getCategoryInfo();
 
+            int pageNumber = 0;
             for (String url : urls) {
+                pageNumber++;
+                log.info("[스크래핑][Nike] 카테고리 페이지 {}/{} 접속: {}", pageNumber, urls.length, url);
                 Category category = categoryService.matchCategory(url, categories);
                 driver.get(url);
 
@@ -67,6 +73,7 @@ public class SeleniumService {
 
                     List<WebElement> cards = driver.findElements(By.cssSelector(".product-card"));
                     int count = cards.size();
+                    log.debug("[스크래핑][Nike] 페이지 {}/{} 로딩 중: 현재 카드 {}개", pageNumber, urls.length, count);
                     if (count == 0) break;
 
                     if (count == prevCount) sameCount++;
@@ -76,9 +83,16 @@ public class SeleniumService {
                     }
                 }
 
-                for (WebElement card : driver.findElements(By.cssSelector(".product-card"))) {
+                List<WebElement> cards = driver.findElements(By.cssSelector(".product-card"));
+                int cardTotal = cards.size();
+                int cardIndex = 0;
+                log.info("[스크래핑][Nike] 페이지 {}/{} 상품 파싱 시작: {}개 카드", pageNumber, urls.length, cardTotal);
+                for (WebElement card : cards) {
+                    cardIndex++;
                     try {
                         String name = card.findElement(By.cssSelector(".product-card__title")).getText();
+                        log.info("[스크래핑][Nike] 페이지 {}/{} 상품 {}/{}: '{}'",
+                                pageNumber, urls.length, cardIndex, cardTotal, name);
                         String image = card.findElement(By.tagName("img")).getAttribute("src");
                         String productUrl = extractHref(card);
                         String externalProductId = extractExternalProductId(productUrl);
@@ -104,18 +118,24 @@ public class SeleniumService {
                                 .soldOut(soldOut)
                                 .build());
                     } catch (Exception e) {
-                        System.out.println("나이키 상품 파싱 실패: " + e.getMessage());
+                        log.warn("[스크래핑][Nike] 페이지 {}/{} 상품 {}/{} 파싱 실패",
+                                pageNumber, urls.length, cardIndex, cardTotal, e);
                     }
                 }
             }
         } finally {
             driver.quit();
+            log.info("[스크래핑][Nike] 브라우저 종료");
         }
+        log.info("[스크래핑][Nike] 수집 완료: {}건, 소요 {}초",
+                products.size(), (System.currentTimeMillis() - startedAt) / 1000);
         return products;
     }
 
     public List<ProductCrawlDto> getAdidasProduct() {
+        long startedAt = System.currentTimeMillis();
         List<ProductCrawlDto> products = new ArrayList<>();
+        log.info("[스크래핑][Adidas] 브라우저 초기화 시작");
         WebDriver driver = seleniumConfig.createWebDriver(SiteType.ADIDAS);
 
         try {
@@ -132,18 +152,29 @@ public class SeleniumService {
 
             List<Category> categories = categoryService.getCategoryInfo();
 
+            int pageNumber = 0;
             for (String url : urls) {
+                pageNumber++;
+                log.info("[스크래핑][Adidas] 카테고리 페이지 {}/{} 접속: {}", pageNumber, urls.length, url);
                 driver.get(url);
                 WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
                 closeAdidasPopups(wait);
 
+                int pageIndex = 0;
                 while (true) {
+                    pageIndex++;
                     List<WebElement> cards =
                             driver.findElements(By.cssSelector("article[data-testid='plp-product-card']"));
-
+                    int cardTotal = cards.size();
+                    int cardIndex = 0;
+                    log.info("[스크래핑][Adidas] 카테고리 {}/{} 내 페이지 {} 상품 파싱 시작: {}개 카드",
+                            pageNumber, urls.length, pageIndex, cardTotal);
                     for (WebElement card : cards) {
+                        cardIndex++;
                         try {
                             String name = card.findElement(By.cssSelector("p[data-testid='product-card-title']")).getText();
+                            log.info("[스크래핑][Adidas] 카테고리 {}/{} 페이지 {} 상품 {}/{}: '{}'",
+                                    pageNumber, urls.length, pageIndex, cardIndex, cardTotal, name);
                             String categoryText = card.findElement(By.cssSelector("p[data-testid='product-card-subtitle']")).getText();
                             String image = card.findElement(By.cssSelector("img[data-testid='product-card-primary-image']")).getAttribute("src");
                             String productUrl = extractHref(card);
@@ -188,7 +219,8 @@ public class SeleniumService {
                                     .soldOut(!soldOut.isEmpty())
                                     .build());
                         } catch (Exception e) {
-                            System.out.println("아디다스 상품 파싱 실패: " + e.getMessage());
+                            log.warn("[스크래핑][Adidas] 카테고리 {}/{} 페이지 {} 상품 {}/{} 파싱 실패",
+                                    pageNumber, urls.length, pageIndex, cardIndex, cardTotal, e);
                         }
                     }
 
@@ -208,7 +240,10 @@ public class SeleniumService {
             }
         } finally {
             driver.quit();
+            log.info("[스크래핑][Adidas] 브라우저 종료");
         }
+        log.info("[스크래핑][Adidas] 수집 완료: {}건, 소요 {}초",
+                products.size(), (System.currentTimeMillis() - startedAt) / 1000);
         return products;
     }
 

@@ -25,7 +25,7 @@ public class Notification extends BaseTimeEntity {
     @Column(nullable = false, length = 500)
     private String message;
 
-    @Column(nullable = false)
+    @Column(name = "is_read", nullable = false)
     private boolean read;
 
     public Notification(User user, Product product, String message) {
